@@ -21,8 +21,8 @@ export const COLORS = {
 };
 
 export function printHeader(
-  title = "BLOG CREATOR",
-  subtitle = "Create a new blog post for the Appwrite website"
+  title = "INTERNAL CLI",
+  subtitle = "Appwrite website content management"
 ) {
   console.clear();
   console.log(`${COLORS.pink}${COLORS.bright}`);

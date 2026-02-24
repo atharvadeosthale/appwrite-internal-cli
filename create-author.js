@@ -61,58 +61,79 @@ function validateUrl(url) {
   }
 }
 
-async function collectAuthorInfo() {
+async function collectAuthorInfo(opts = {}) {
   const authorInfo = {};
+  const hasFlags = Object.keys(opts).some(
+    (k) => !["force", "skipClose"].includes(k)
+  );
 
   console.log(`\n${COLORS.bright}👤 Author Information${COLORS.reset}\n`);
 
   // Name
-  let name = "";
-  while (!name) {
-    name = await question("Full Name: ");
-    if (!name) {
-      console.log(`${COLORS.red}Name is required!${COLORS.reset}`);
+  let name = opts.name || "";
+  if (!name) {
+    if (hasFlags) throw new Error("--name is required");
+    while (!name) {
+      name = await question("Full Name: ");
+      if (!name) {
+        console.log(`${COLORS.red}Name is required!${COLORS.reset}`);
+      }
     }
   }
   authorInfo.name = name;
 
-  // Auto-generate slug from name
+  // Slug
   const suggestedSlug = slugify(authorInfo.name);
-  let slug = await questionWithDefault("Slug", suggestedSlug);
-
+  let slug = opts.slug || "";
+  if (!slug) {
+    slug = hasFlags
+      ? suggestedSlug
+      : await questionWithDefault("Slug", suggestedSlug);
+  }
   let validation = validateSlug(slug);
-  while (!validation.valid) {
-    console.log(`${COLORS.red}${validation.message}${COLORS.reset}`);
-    slug = await question("Please enter a different slug: ");
-    validation = validateSlug(slug);
+  if (!validation.valid) {
+    if (hasFlags) throw new Error(validation.message);
+    while (!validation.valid) {
+      console.log(`${COLORS.red}${validation.message}${COLORS.reset}`);
+      slug = await question("Please enter a different slug: ");
+      validation = validateSlug(slug);
+    }
   }
   authorInfo.slug = slug;
 
   // Role
-  console.log(`\n${COLORS.bright}💼 Professional Information${COLORS.reset}\n`);
-
-  let role = "";
-  while (!role) {
-    role = await question(
-      "Role (e.g., Developer Advocate, Software Engineer): "
+  if (!hasFlags) {
+    console.log(
+      `\n${COLORS.bright}💼 Professional Information${COLORS.reset}\n`
     );
-    if (!role) {
-      console.log(`${COLORS.red}Role is required!${COLORS.reset}`);
+  }
+  let role = opts.role || "";
+  if (!role) {
+    if (hasFlags) throw new Error("--role is required");
+    while (!role) {
+      role = await question(
+        "Role (e.g., Developer Advocate, Software Engineer): "
+      );
+      if (!role) {
+        console.log(`${COLORS.red}Role is required!${COLORS.reset}`);
+      }
     }
   }
   authorInfo.role = role;
 
   // Bio
-  console.log(`\n${COLORS.bright}📝 Bio${COLORS.reset}`);
-  console.log(
-    `${COLORS.dim}Write a short bio (1-2 sentences)${COLORS.reset}\n`
-  );
-  const bio = await question("Bio: ");
-
-  authorInfo.bio = bio || `${authorInfo.role} at Appwrite`;
+  if (!hasFlags) {
+    console.log(`\n${COLORS.bright}📝 Bio${COLORS.reset}`);
+    console.log(
+      `${COLORS.dim}Write a short bio (1-2 sentences)${COLORS.reset}\n`
+    );
+    const bio = await question("Bio: ");
+    authorInfo.bio = bio || `${authorInfo.role} at Appwrite`;
+  } else {
+    authorInfo.bio = opts.bio || `${authorInfo.role} at Appwrite`;
+  }
 
   // Avatar
-  console.log(`\n${COLORS.bright}🖼️ Avatar${COLORS.reset}`);
   const avatarFileName = `${authorInfo.slug}.png`;
   const avatarPath = `/images/avatars/${avatarFileName}`;
   const fullAvatarPath = path.join(
@@ -123,46 +144,86 @@ async function collectAuthorInfo() {
     avatarFileName
   );
 
-  const imageResult = await imagePathInput("Add Avatar Image", fullAvatarPath);
-  authorInfo.avatar = avatarPath;
-  authorInfo.avatarSourcePath = imageResult.sourcePath;
-  authorInfo.avatarTargetPath = imageResult.targetPath;
+  if (opts.avatar) {
+    authorInfo.avatar = avatarPath;
+    authorInfo.avatarSourcePath = opts.avatar;
+    authorInfo.avatarTargetPath = fullAvatarPath;
+  } else if (hasFlags) {
+    authorInfo.avatar = avatarPath;
+    authorInfo.avatarSourcePath = null;
+    authorInfo.avatarTargetPath = fullAvatarPath;
+  } else {
+    console.log(`\n${COLORS.bright}🖼️ Avatar${COLORS.reset}`);
+    const imageResult = await imagePathInput(
+      "Add Avatar Image",
+      fullAvatarPath
+    );
+    authorInfo.avatar = avatarPath;
+    authorInfo.avatarSourcePath = imageResult.sourcePath;
+    authorInfo.avatarTargetPath = imageResult.targetPath;
+  }
 
   // Social Links
-  console.log(`\n${COLORS.bright}🔗 Social Links${COLORS.reset}`);
-  console.log(
-    `${COLORS.dim}Leave blank to skip any social link${COLORS.reset}\n`
-  );
+  if (!hasFlags) {
+    console.log(`\n${COLORS.bright}🔗 Social Links${COLORS.reset}`);
+    console.log(
+      `${COLORS.dim}Leave blank to skip any social link${COLORS.reset}\n`
+    );
+  }
 
   // Twitter/X
-  let twitter = await question(
-    "Twitter/X URL (e.g., https://x.com/username): "
-  );
-  while (twitter && twitter.trim() && !validateUrl(twitter)) {
-    console.log(`${COLORS.red}Invalid URL format${COLORS.reset}`);
-    twitter = await question("Twitter/X URL (leave blank to skip): ");
+  if (opts.twitter !== undefined) {
+    if (opts.twitter && !validateUrl(opts.twitter))
+      throw new Error("Invalid --twitter URL");
+    authorInfo.twitter = opts.twitter || "";
+  } else if (hasFlags) {
+    authorInfo.twitter = "";
+  } else {
+    let twitter = await question(
+      "Twitter/X URL (e.g., https://x.com/username): "
+    );
+    while (twitter && twitter.trim() && !validateUrl(twitter)) {
+      console.log(`${COLORS.red}Invalid URL format${COLORS.reset}`);
+      twitter = await question("Twitter/X URL (leave blank to skip): ");
+    }
+    authorInfo.twitter = twitter ? twitter.trim() : "";
   }
-  authorInfo.twitter = twitter ? twitter.trim() : "";
 
   // GitHub
-  let github = await question(
-    "GitHub URL (e.g., https://github.com/username): "
-  );
-  while (github && github.trim() && !validateUrl(github)) {
-    console.log(`${COLORS.red}Invalid URL format${COLORS.reset}`);
-    github = await question("GitHub URL (leave blank to skip): ");
+  if (opts.github !== undefined) {
+    if (opts.github && !validateUrl(opts.github))
+      throw new Error("Invalid --github URL");
+    authorInfo.github = opts.github || "";
+  } else if (hasFlags) {
+    authorInfo.github = "";
+  } else {
+    let github = await question(
+      "GitHub URL (e.g., https://github.com/username): "
+    );
+    while (github && github.trim() && !validateUrl(github)) {
+      console.log(`${COLORS.red}Invalid URL format${COLORS.reset}`);
+      github = await question("GitHub URL (leave blank to skip): ");
+    }
+    authorInfo.github = github ? github.trim() : "";
   }
-  authorInfo.github = github ? github.trim() : "";
 
   // LinkedIn
-  let linkedin = await question(
-    "LinkedIn URL (e.g., https://www.linkedin.com/in/username): "
-  );
-  while (linkedin && linkedin.trim() && !validateUrl(linkedin)) {
-    console.log(`${COLORS.red}Invalid URL format${COLORS.reset}`);
-    linkedin = await question("LinkedIn URL (leave blank to skip): ");
+  if (opts.linkedin !== undefined) {
+    if (opts.linkedin && !validateUrl(opts.linkedin))
+      throw new Error("Invalid --linkedin URL");
+    authorInfo.linkedin = opts.linkedin || "";
+  } else if (hasFlags) {
+    authorInfo.linkedin = "";
+  } else {
+    let linkedin = await question(
+      "LinkedIn URL (e.g., https://www.linkedin.com/in/username): "
+    );
+    while (linkedin && linkedin.trim() && !validateUrl(linkedin)) {
+      console.log(`${COLORS.red}Invalid URL format${COLORS.reset}`);
+      linkedin = await question("LinkedIn URL (leave blank to skip): ");
+    }
+    authorInfo.linkedin = linkedin ? linkedin.trim() : "";
   }
-  authorInfo.linkedin = linkedin ? linkedin.trim() : "";
 
   return authorInfo;
 }
@@ -235,11 +296,11 @@ async function createAuthorFiles(authorInfo) {
   }
 }
 
-async function main() {
+async function main(opts = {}) {
   printHeader("AUTHOR CREATOR", "Add a new author to the Appwrite blog");
 
   try {
-    const authorInfo = await collectAuthorInfo();
+    const authorInfo = await collectAuthorInfo(opts);
 
     // Review information
     console.log(
@@ -265,17 +326,19 @@ async function main() {
       );
     }
 
-    const confirm = await selectFromList("\nCreate this author profile?", [
-      { label: "Yes, create it!", value: true },
-      { label: "No, cancel", value: false },
-    ]);
+    if (!opts.force) {
+      const confirm = await selectFromList("\nCreate this author profile?", [
+        { label: "Yes, create it!", value: true },
+        { label: "No, cancel", value: false },
+      ]);
 
-    if (!confirm) {
-      console.log(
-        `\n${COLORS.yellow}Author creation cancelled.${COLORS.reset}`
-      );
-      closeReadline();
-      return;
+      if (!confirm) {
+        console.log(
+          `\n${COLORS.yellow}Author creation cancelled.${COLORS.reset}`
+        );
+        closeReadline();
+        return;
+      }
     }
 
     const result = await createAuthorFiles(authorInfo);
@@ -310,7 +373,13 @@ async function main() {
         );
       }
       console.log(
-        `\n${COLORS.dim}Run 'npx appwrite-internal-cli blog create-blog' to create a blog post with this author!${COLORS.reset}`
+        `\n${COLORS.dim}Other commands:${COLORS.reset}`
+      );
+      console.log(
+        `${COLORS.dim}  blog create-blog     Create a blog post with this author${COLORS.reset}`
+      );
+      console.log(
+        `${COLORS.dim}  blog get-authors     List all authors as JSON${COLORS.reset}`
       );
     } else {
       console.log(
@@ -332,8 +401,8 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-export async function runCreateAuthor() {
-  await main();
+export async function runCreateAuthor(opts = {}) {
+  await main(opts);
 }
 
 if (

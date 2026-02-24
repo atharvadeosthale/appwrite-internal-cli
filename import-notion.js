@@ -455,14 +455,27 @@ function updateMarkdocBody(slug, newBody) {
   return markdocPath;
 }
 
-async function main() {
+async function main({
+  preSelectedSlug = null,
+  preSelectedZip = null,
+  preSelectedMdFile = null,
+  skipClose = false,
+} = {}) {
   printHeader(
     "NOTION IMPORTER",
     "Import a Notion export into an existing blog post"
   );
 
   try {
-    const zipPath = await promptZipPath();
+    let zipPath;
+    if (preSelectedZip) {
+      if (!fs.existsSync(preSelectedZip) || !preSelectedZip.toLowerCase().endsWith(".zip")) {
+        throw new Error(`Invalid zip path: ${preSelectedZip}`);
+      }
+      zipPath = preSelectedZip;
+    } else {
+      zipPath = await promptZipPath();
+    }
     console.log(`\n${COLORS.dim}Zip: ${zipPath}${COLORS.reset}`);
     console.log(`${COLORS.dim}Extracting zip...${COLORS.reset}`);
     const extractedDir = await extractZip(zipPath);
@@ -510,12 +523,39 @@ async function main() {
       }
     } catch {}
 
-    const mdFile = await selectMarkdownFile(searchRoot);
+    let mdFile;
+    if (preSelectedMdFile !== null) {
+      const files = listMarkdownFiles(searchRoot);
+      if (files.length === 0) {
+        throw new Error("No markdown files found in the Notion export");
+      }
+      const idx = parseInt(preSelectedMdFile, 10);
+      if (isNaN(idx) || idx < 0 || idx >= files.length) {
+        throw new Error(
+          `Invalid --md-file index ${preSelectedMdFile}. Found ${files.length} file(s) (0-${files.length - 1}).`
+        );
+      }
+      mdFile = files[idx];
+    } else if (preSelectedZip) {
+      // Non-interactive: auto-select first markdown file
+      const files = listMarkdownFiles(searchRoot);
+      if (files.length === 0) {
+        throw new Error("No markdown files found in the Notion export");
+      }
+      mdFile = files[0];
+      if (files.length > 1) {
+        console.log(
+          `${COLORS.yellow}Multiple markdown files found, using first: ${path.relative(searchRoot, mdFile)}${COLORS.reset}`
+        );
+      }
+    } else {
+      mdFile = await selectMarkdownFile(searchRoot);
+    }
     console.log(`${COLORS.dim}Selected markdown: ${mdFile}${COLORS.reset}`);
     const rawMd = fs.readFileSync(mdFile, "utf8");
     const cleanedMd = stripTitleAndFrontmatter(rawMd);
 
-    const slug = await selectBlogSlug();
+    const slug = preSelectedSlug || (await selectBlogSlug());
     console.log(`${COLORS.dim}Selected blog slug: ${slug}${COLORS.reset}`);
 
     // Prepare target images dir
@@ -643,7 +683,9 @@ async function main() {
     console.log(`\n${COLORS.red}Error: ${error.message}${COLORS.reset}`);
   }
 
-  closeReadline();
+  if (!skipClose) {
+    closeReadline();
+  }
 }
 
 process.on("SIGINT", () => {
@@ -654,8 +696,13 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-export async function runImportNotion() {
-  await main();
+export async function runImportNotion({ slug, zip, mdFile, skipClose } = {}) {
+  await main({
+    preSelectedSlug: slug || null,
+    preSelectedZip: zip || null,
+    preSelectedMdFile: mdFile !== undefined ? mdFile : null,
+    skipClose: !!skipClose,
+  });
 }
 
 if (

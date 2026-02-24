@@ -109,76 +109,118 @@ function validateSlug(slug) {
   return { valid: true };
 }
 
-async function collectBlogInfo(authors, categories) {
+async function collectBlogInfo(authors, categories, opts = {}) {
   const blogInfo = {};
+  const hasFlags = Object.keys(opts).some(
+    (k) => !["force", "featured", "importNotion", "skipClose"].includes(k)
+  );
 
   console.log(`\n${COLORS.bright}📝 Blog Post Information${COLORS.reset}\n`);
 
-  blogInfo.title = await question("Title: ");
-
+  // Title
+  blogInfo.title = opts.title || "";
   if (!blogInfo.title) {
-    throw new Error("Title is required");
+    if (hasFlags) throw new Error("--title is required");
+    blogInfo.title = await question("Title: ");
+    if (!blogInfo.title) throw new Error("Title is required");
   }
 
-  // Auto-generate slug from title
+  // Slug
   const suggestedSlug = slugify(blogInfo.title);
-  let slug = await questionWithDefault("Slug", suggestedSlug);
-
-  let validation = validateSlug(slug);
-  while (!validation.valid) {
-    console.log(`${COLORS.red}${validation.message}${COLORS.reset}`);
-    slug = await question("Please enter a different slug: ");
-    validation = validateSlug(slug);
+  let slug = opts.slug || "";
+  if (!slug) {
+    slug = hasFlags
+      ? suggestedSlug
+      : await questionWithDefault("Slug", suggestedSlug);
   }
-
+  let validation = validateSlug(slug);
+  if (!validation.valid) {
+    if (hasFlags) throw new Error(validation.message);
+    while (!validation.valid) {
+      console.log(`${COLORS.red}${validation.message}${COLORS.reset}`);
+      slug = await question("Please enter a different slug: ");
+      validation = validateSlug(slug);
+    }
+  }
   blogInfo.slug = slug;
 
-  blogInfo.description = await question("Description (SEO meta description): ");
-
+  // Description
+  blogInfo.description = opts.description || "";
   if (!blogInfo.description) {
-    throw new Error("Description is required");
+    if (hasFlags) throw new Error("--description is required");
+    blogInfo.description = await question(
+      "Description (SEO meta description): "
+    );
+    if (!blogInfo.description) throw new Error("Description is required");
   }
 
+  // Date
   const today = new Date().toISOString().split("T")[0];
-  blogInfo.date = await questionWithDefault("Date (YYYY-MM-DD)", today);
+  blogInfo.date = opts.date || (hasFlags ? today : "");
+  if (!blogInfo.date) {
+    blogInfo.date = await questionWithDefault("Date (YYYY-MM-DD)", today);
+  }
 
-  blogInfo.timeToRead = await questionWithDefault(
-    "Time to read (minutes)",
-    "5"
-  );
-
-  // Author selection
-  console.log(`\n${COLORS.bright}👤 Select Author${COLORS.reset}`);
-  if (authors.length > 0) {
-    blogInfo.author = await selectFromList("Choose an author:", authors);
-  } else {
-    console.log(
-      `${COLORS.yellow}No authors found. You'll need to create an author file first.${COLORS.reset}`
-    );
-    blogInfo.author = await question(
-      "Enter author slug manually (e.g., john-doe): "
+  // Time to read
+  blogInfo.timeToRead = opts.timeToRead || (hasFlags ? "5" : "");
+  if (!blogInfo.timeToRead) {
+    blogInfo.timeToRead = await questionWithDefault(
+      "Time to read (minutes)",
+      "5"
     );
   }
 
-  // Category selection
-  console.log(`\n${COLORS.bright}🏷️ Select Category${COLORS.reset}`);
-  if (categories.length > 0) {
-    blogInfo.category = await selectFromList("Choose a category:", categories);
+  // Author
+  if (opts.author) {
+    blogInfo.author = opts.author;
+  } else if (hasFlags) {
+    throw new Error("--author is required");
   } else {
-    console.log(
-      `${COLORS.yellow}No categories found. You can enter one manually.${COLORS.reset}`
-    );
-    blogInfo.category = await question("Enter category: ");
+    console.log(`\n${COLORS.bright}👤 Select Author${COLORS.reset}`);
+    if (authors.length > 0) {
+      blogInfo.author = await selectFromList("Choose an author:", authors);
+    } else {
+      console.log(
+        `${COLORS.yellow}No authors found. You'll need to create an author file first.${COLORS.reset}`
+      );
+      blogInfo.author = await question(
+        "Enter author slug manually (e.g., john-doe): "
+      );
+    }
   }
 
-  const isFeatured = await selectFromList("Featured post?", [
-    { label: "No", value: false },
-    { label: "Yes", value: true },
-  ]);
-  blogInfo.featured = isFeatured;
+  // Category
+  if (opts.category) {
+    blogInfo.category = opts.category;
+  } else if (hasFlags) {
+    throw new Error("--category is required");
+  } else {
+    console.log(`\n${COLORS.bright}🏷️ Select Category${COLORS.reset}`);
+    if (categories.length > 0) {
+      blogInfo.category = await selectFromList(
+        "Choose a category:",
+        categories
+      );
+    } else {
+      console.log(
+        `${COLORS.yellow}No categories found. You can enter one manually.${COLORS.reset}`
+      );
+      blogInfo.category = await question("Enter category: ");
+    }
+  }
+
+  // Featured
+  if (hasFlags) {
+    blogInfo.featured = !!opts.featured;
+  } else {
+    const isFeatured = await selectFromList("Featured post?", [
+      { label: "No", value: false },
+      { label: "Yes", value: true },
+    ]);
+    blogInfo.featured = isFeatured;
+  }
 
   // Cover Image
-  console.log(`\n${COLORS.bright}🖼️ Cover Image${COLORS.reset}`);
   const coverFileName = "cover.png";
   const coverPath = `/images/blog/${blogInfo.slug}/${coverFileName}`;
   const fullCoverPath = path.join(
@@ -190,10 +232,21 @@ async function collectBlogInfo(authors, categories) {
     coverFileName
   );
 
-  const imageResult = await imagePathInput("Add Cover Image", fullCoverPath);
-  blogInfo.cover = coverPath;
-  blogInfo.coverSourcePath = imageResult.sourcePath;
-  blogInfo.coverTargetPath = imageResult.targetPath;
+  if (opts.cover) {
+    blogInfo.cover = coverPath;
+    blogInfo.coverSourcePath = opts.cover;
+    blogInfo.coverTargetPath = fullCoverPath;
+  } else if (hasFlags) {
+    blogInfo.cover = coverPath;
+    blogInfo.coverSourcePath = null;
+    blogInfo.coverTargetPath = fullCoverPath;
+  } else {
+    console.log(`\n${COLORS.bright}🖼️ Cover Image${COLORS.reset}`);
+    const imageResult = await imagePathInput("Add Cover Image", fullCoverPath);
+    blogInfo.cover = coverPath;
+    blogInfo.coverSourcePath = imageResult.sourcePath;
+    blogInfo.coverTargetPath = imageResult.targetPath;
+  }
 
   return blogInfo;
 }
@@ -283,8 +336,8 @@ async function createBlogFiles(blogInfo) {
   }
 }
 
-async function main() {
-  printHeader();
+async function main(opts = {}) {
+  printHeader("BLOG CREATOR", "Create a new blog post for the Appwrite website");
 
   console.log(
     `${COLORS.dim}Loading authors and categories...${COLORS.reset}\n`
@@ -315,7 +368,7 @@ async function main() {
   }
 
   try {
-    const blogInfo = await collectBlogInfo(authors, categories);
+    const blogInfo = await collectBlogInfo(authors, categories, opts);
 
     console.log(
       `\n${COLORS.bright}📋 Review Blog Information${COLORS.reset}\n`
@@ -334,15 +387,19 @@ async function main() {
       `${COLORS.pink}Time to Read:${COLORS.reset} ${blogInfo.timeToRead} minutes`
     );
 
-    const confirm = await selectFromList("\nCreate this blog post?", [
-      { label: "Yes, create it!", value: true },
-      { label: "No, cancel", value: false },
-    ]);
+    if (!opts.force) {
+      const confirm = await selectFromList("\nCreate this blog post?", [
+        { label: "Yes, create it!", value: true },
+        { label: "No, cancel", value: false },
+      ]);
 
-    if (!confirm) {
-      console.log(`\n${COLORS.yellow}Blog creation cancelled.${COLORS.reset}`);
-      closeReadline();
-      return;
+      if (!confirm) {
+        console.log(
+          `\n${COLORS.yellow}Blog creation cancelled.${COLORS.reset}`
+        );
+        closeReadline();
+        return;
+      }
     }
 
     const result = await createBlogFiles(blogInfo);
@@ -378,8 +435,42 @@ async function main() {
       }
 
       console.log(
-        `\n${COLORS.dim}Run 'pnpm dev' to see your blog post in action!${COLORS.reset}`
+        `\n${COLORS.dim}Other commands:${COLORS.reset}`
       );
+      console.log(
+        `${COLORS.dim}  blog import-notion   Import content from a Notion export${COLORS.reset}`
+      );
+      console.log(
+        `${COLORS.dim}  blog sanitize        Fix headings and curly quotes${COLORS.reset}`
+      );
+      console.log(
+        `${COLORS.dim}  blog get-blogs       List all blog posts as JSON${COLORS.reset}`
+      );
+
+      // Notion import chaining
+      if (opts.importNotion) {
+        // Non-interactive: auto-chain with provided zip path
+        const { runImportNotion } = await import("./import-notion.js");
+        await runImportNotion({
+          slug: blogInfo.slug,
+          zip: opts.importNotion,
+          skipClose: true,
+        });
+      } else if (!opts.force) {
+        // Interactive: ask user
+        const importFromNotion = await selectFromList(
+          "\nWould you like to import content from Notion?",
+          [
+            { label: "Yes", value: true },
+            { label: "No", value: false },
+          ]
+        );
+
+        if (importFromNotion) {
+          const { runImportNotion } = await import("./import-notion.js");
+          await runImportNotion({ slug: blogInfo.slug, skipClose: true });
+        }
+      }
     } else {
       console.log(
         `\n${COLORS.red}Error creating blog files: ${result.error}${COLORS.reset}`
@@ -400,8 +491,8 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
-export async function runCreateBlog() {
-  await main();
+export async function runCreateBlog(opts = {}) {
+  await main(opts);
 }
 
 if (

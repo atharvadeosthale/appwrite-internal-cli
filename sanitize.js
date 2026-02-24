@@ -171,18 +171,20 @@ export function sanitizeSlug(slug) {
   return sanitizeMarkdoc(markdocPath);
 }
 
-async function main() {
+async function main(opts = {}) {
   printHeader("SANITIZE BLOG", "Fix headings and curly quotes in a blog post");
   try {
-    const blogs = getBlogs();
-    if (blogs.length === 0) {
-      console.log(`${COLORS.red}No blogs found to sanitize${COLORS.reset}`);
-      return;
+    let slug;
+    if (opts.slug) {
+      slug = opts.slug;
+    } else {
+      const blogs = getBlogs();
+      if (blogs.length === 0) {
+        console.log(`${COLORS.red}No blogs found to sanitize${COLORS.reset}`);
+        return;
+      }
+      slug = await selectFromListFilter("Select a blog to sanitize:", blogs);
     }
-    const slug = await selectFromListFilter(
-      "Select a blog to sanitize:",
-      blogs
-    );
     const markdocPath = path.join(
       ROOT_DIR,
       "src",
@@ -210,8 +212,8 @@ async function main() {
   closeReadline();
 }
 
-export async function runSanitize() {
-  await main();
+export async function runSanitize(opts = {}) {
+  await main(opts);
 }
 
 if (
