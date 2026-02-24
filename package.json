@@ -1,6 +1,6 @@
 {
   "name": "appwrite-internal-cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Internal CLI for Appwrite website content management (blogs, authors, categories)",
   "type": "module",
   "bin": "bin/cli.js",
