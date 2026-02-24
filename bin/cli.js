@@ -44,7 +44,7 @@ function printBlogHelp() {
 function parseFlags() {
   const args = process.argv.slice(4);
   const flags = {};
-  const booleanFlags = new Set(["force", "featured"]);
+  const booleanFlags = new Set(["force", "featured", "unlisted"]);
   let i = 0;
   while (i < args.length) {
     const arg = args[i];

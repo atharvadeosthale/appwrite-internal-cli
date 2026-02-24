@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import { pathToFileURL } from "url";
 import {
   COLORS,
@@ -152,6 +153,20 @@ function sanitizeMarkdoc(markdocPath) {
   return { ok: true, quotesChanged, headingsChanged };
 }
 
+function runPostSanitize() {
+  const commands = ["bun run optimize", "bun run format"];
+  for (const cmd of commands) {
+    try {
+      console.log(`${COLORS.dim}[SAN] Running: ${cmd}${COLORS.reset}`);
+      execSync(cmd, { cwd: ROOT_DIR, stdio: "inherit" });
+    } catch (e) {
+      console.log(
+        `${COLORS.yellow}[SAN] '${cmd}' failed: ${e.message}${COLORS.reset}`
+      );
+    }
+  }
+}
+
 export function sanitizeSlug(slug) {
   const markdocPath = path.join(
     ROOT_DIR,
@@ -168,7 +183,11 @@ export function sanitizeSlug(slug) {
     );
     return { ok: false };
   }
-  return sanitizeMarkdoc(markdocPath);
+  const res = sanitizeMarkdoc(markdocPath);
+  if (res.ok) {
+    runPostSanitize();
+  }
+  return res;
 }
 
 async function main(opts = {}) {
@@ -203,6 +222,7 @@ async function main(opts = {}) {
       console.log(
         `${COLORS.pink}${COLORS.bright}✓ Sanitized${COLORS.reset} ${markdocPath}`
       );
+      runPostSanitize();
     } else {
       console.log(`${COLORS.red}Failed to parse markdoc${COLORS.reset}`);
     }

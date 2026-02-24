@@ -128,6 +128,7 @@ Create a new blog post under `src/routes/blog/post/<slug>/`.
 | `--author <string>` | Yes | — | Author slug (must match an existing author) |
 | `--category <string>` | Yes | — | Category name (must match an existing category directory) |
 | `--featured` | No | `false` | Mark as featured post (boolean flag, presence = true) |
+| `--unlisted` | No | `false` | Mark as unlisted post (boolean flag, presence = true). Unlisted posts are not shown in blog listings |
 | `--cover <path>` | No | — | Path to cover image file. Copied to `static/images/blog/<slug>/cover.png` |
 | `--import-notion <path>` | No | — | Path to Notion export .zip file. Auto-chains into the Notion import flow after blog creation |
 | `--force` | No | `false` | Skip confirmation and Notion import prompts |
@@ -143,16 +144,19 @@ Create a new blog post under `src/routes/blog/post/<slug>/`.
 ```yaml
 ---
 layout: post
-title: <title>
-description: <description>
+title: "<title>"
+description: "<description>"
 date: <YYYY-MM-DD>
 cover: /images/blog/<slug>/cover.png
 timeToRead: <minutes>
 author: <author-slug>
 category: <category>
 featured: <true|false>
+unlisted: true           # only present when true
 ---
 ```
+
+`title` and `description` are automatically wrapped in double quotes to prevent YAML parsing errors when values contain colons or other special characters.
 
 ### Chaining Behavior
 
@@ -206,6 +210,7 @@ npx appwrite-internal-cli blog create-blog \
   --author john-doe \
   --category tutorials \
   --featured \
+  --unlisted \
   --cover ./cover.png \
   --force
 ```
@@ -242,7 +247,7 @@ Import a Notion export (.zip) into an existing blog post, replacing the markdoc 
 4. **Copy images** — Copies all referenced images and extra images from the export to `static/images/blog/<slug>/`
 5. **Rewrite paths** — Rewrites all image references to `/images/blog/<slug>/<filename>`
 6. **Update markdoc** — Replaces the body of `+page.markdoc` (after frontmatter) with the processed content
-7. **Auto-sanitize** — Automatically runs the sanitize command (fix headings, curly quotes) on the imported blog
+7. **Auto-sanitize** — Automatically runs the sanitize command (fix headings, curly quotes, then `bun run optimize` and `bun run format`) on the imported blog
 
 ### Image Handling
 
@@ -293,10 +298,13 @@ Fix heading levels and curly/smart quotes in a blog post's markdoc file.
 
 *Required for non-interactive mode. In interactive mode, the user is prompted with a searchable list.
 
-### What It Fixes
+### What It Does
 
 1. **Curly quotes** — Replaces Unicode smart quotes (`\u2018`, `\u2019`, `\u201C`, `\u201D`, etc.) with straight ASCII quotes (`'`, `"`)
 2. **Heading levels** — If the first heading in the body is `##` or deeper, promotes all headings by one level (e.g., `##` becomes `#`, `###` becomes `##`)
+3. **Post-sanitize commands** — After a successful sanitize, automatically runs in the website repo:
+   - `bun run optimize` — optimizes images and assets
+   - `bun run format` — formats code with the project's formatter
 
 ### Examples
 
@@ -476,7 +484,8 @@ npx appwrite-internal-cli blog get-blogs
     "timeToRead": "number",
     "author": "string",
     "category": "string",
-    "featured": "boolean"
+    "featured": "boolean",
+    "unlisted": "boolean"
   }
 ]
 ```
@@ -494,6 +503,7 @@ npx appwrite-internal-cli blog get-blogs
 | `author` | `string` | Author slug. References an author from `get-authors` by the `slug` field. Empty string `""` if not set. | `"aditya-oberai"` |
 | `category` | `string` | Category slug. References a category from `get-categories` by the `slug` field. Empty string `""` if not set. | `"tutorial"` |
 | `featured` | `boolean` | Whether the post is marked as featured. `false` if the field is absent from frontmatter or set to `false`. | `false` |
+| `unlisted` | `boolean` | Whether the post is unlisted (hidden from blog listings). `false` if the field is absent from frontmatter or set to `false`. | `false` |
 
 #### Notes
 
@@ -518,7 +528,8 @@ npx appwrite-internal-cli blog get-blogs
     "timeToRead": 4,
     "author": "aditya-oberai",
     "category": "announcement",
-    "featured": false
+    "featured": false,
+    "unlisted": false
   },
   {
     "slug": "ai-crystal-ball",
@@ -529,7 +540,8 @@ npx appwrite-internal-cli blog get-blogs
     "timeToRead": 9,
     "author": "aditya-oberai",
     "category": "tutorial",
-    "featured": false
+    "featured": false,
+    "unlisted": false
   }
 ]
 ```
@@ -604,6 +616,7 @@ await runCreateBlog({
   date: "2025-06-15",               // optional, defaults to today
   timeToRead: "8",                  // optional, defaults to "5"
   featured: true,                   // optional, defaults to false
+  unlisted: true,                   // optional, defaults to false
   cover: "/path/to/cover.png",      // optional
   importNotion: "/path/to/export.zip", // optional, chains Notion import
   force: true,                      // skip confirmations

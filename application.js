@@ -112,6 +112,7 @@ export function getBlogs() {
       author: data.author || "",
       category: data.category || "",
       featured: data.featured === true,
+      unlisted: data.unlisted === true,
     });
   }
   return blogs.sort((a, b) => {

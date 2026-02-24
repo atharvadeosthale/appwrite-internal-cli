@@ -112,7 +112,10 @@ function validateSlug(slug) {
 async function collectBlogInfo(authors, categories, opts = {}) {
   const blogInfo = {};
   const hasFlags = Object.keys(opts).some(
-    (k) => !["force", "featured", "importNotion", "skipClose"].includes(k)
+    (k) =>
+      !["force", "featured", "unlisted", "importNotion", "skipClose"].includes(
+        k
+      )
   );
 
   console.log(`\n${COLORS.bright}📝 Blog Post Information${COLORS.reset}\n`);
@@ -220,6 +223,17 @@ async function collectBlogInfo(authors, categories, opts = {}) {
     blogInfo.featured = isFeatured;
   }
 
+  // Unlisted
+  if (hasFlags) {
+    blogInfo.unlisted = !!opts.unlisted;
+  } else {
+    const isUnlisted = await selectFromList("Unlisted post?", [
+      { label: "No", value: false },
+      { label: "Yes", value: true },
+    ]);
+    blogInfo.unlisted = isUnlisted;
+  }
+
   // Cover Image
   const coverFileName = "cover.png";
   const coverPath = `/images/blog/${blogInfo.slug}/${coverFileName}`;
@@ -251,17 +265,31 @@ async function collectBlogInfo(authors, categories, opts = {}) {
   return blogInfo;
 }
 
+function yamlQuote(value) {
+  const str = String(value);
+  if (/[:{}"'\n]/.test(str) || str !== str.trim()) {
+    return `"${str.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  }
+  return str;
+}
+
 function generateMarkdocContent(blogInfo) {
-  const frontmatter = `---
+  let frontmatter = `---
 layout: post
-title: ${blogInfo.title}
-description: ${blogInfo.description}
+title: ${yamlQuote(blogInfo.title)}
+description: ${yamlQuote(blogInfo.description)}
 date: ${blogInfo.date}
 cover: ${blogInfo.cover}
 timeToRead: ${blogInfo.timeToRead}
 author: ${blogInfo.author}
 category: ${blogInfo.category}
-featured: ${blogInfo.featured}
+featured: ${blogInfo.featured}`;
+
+  if (blogInfo.unlisted) {
+    frontmatter += `\nunlisted: true`;
+  }
+
+  frontmatter += `
 ---
 
 # ${blogInfo.title}
@@ -382,6 +410,7 @@ async function main(opts = {}) {
     console.log(`${COLORS.pink}Author:${COLORS.reset} ${blogInfo.author}`);
     console.log(`${COLORS.pink}Category:${COLORS.reset} ${blogInfo.category}`);
     console.log(`${COLORS.pink}Featured:${COLORS.reset} ${blogInfo.featured}`);
+    console.log(`${COLORS.pink}Unlisted:${COLORS.reset} ${blogInfo.unlisted}`);
     console.log(`${COLORS.pink}Cover:${COLORS.reset} ${blogInfo.cover}`);
     console.log(
       `${COLORS.pink}Time to Read:${COLORS.reset} ${blogInfo.timeToRead} minutes`
