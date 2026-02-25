@@ -116,6 +116,35 @@ function getFirstHeadingLevel(markdocBody) {
   return 0;
 }
 
+function stripBoldFromHeadings(text) {
+  const lines = text.split(/\r?\n/);
+  let insideFence = false;
+  let changes = 0;
+  const result = lines.map((line) => {
+    if (/^\s*```/.test(line)) {
+      insideFence = !insideFence;
+      return line;
+    }
+    if (insideFence) return line;
+    const m = line.match(/^(\s*#{1,6}\s+)(.*)/);
+    if (!m) return line;
+    const prefix = m[1];
+    let heading = m[2];
+    // Strip bold (**text** or __text__) and italic (*text* or _text_)
+    const cleaned = heading
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/__(.+?)__/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1")
+      .replace(/_(.+?)_/g, "$1");
+    if (cleaned !== heading) changes++;
+    return `${prefix}${cleaned}`;
+  });
+  console.log(
+    `${COLORS.dim}[SAN] Bold/italic stripped from ${changes} heading(s)${COLORS.reset}`
+  );
+  return { updated: result.join("\n"), changed: changes > 0 };
+}
+
 function sanitizeMarkdoc(markdocPath) {
   console.log(`${COLORS.dim}[SAN] Reading: ${markdocPath}${COLORS.reset}`);
   const content = fs.readFileSync(markdocPath, "utf8");
@@ -133,8 +162,10 @@ function sanitizeMarkdoc(markdocPath) {
   const curlyBefore = countCurlyQuotes(body);
 
   const quotesFixed = sanitizeQuotes(body);
+  const { updated: boldStripped, changed: boldChanged } =
+    stripBoldFromHeadings(quotesFixed);
   const { updated: headingsFixed, changed: headingsChanged } =
-    fixHeadings(quotesFixed);
+    fixHeadings(boldStripped);
 
   const curlyAfter = countCurlyQuotes(headingsFixed);
   const quotesChanged = quotesFixed !== body;
@@ -147,10 +178,10 @@ function sanitizeMarkdoc(markdocPath) {
       quotesChanged ? curlyBefore - curlyAfter : 0
     }; First heading was: ${
       beforeLevel || "none"
-    }; Headings changed: ${headingsChanged}${COLORS.reset}`
+    }; Headings changed: ${headingsChanged}; Bold stripped: ${boldChanged}${COLORS.reset}`
   );
 
-  return { ok: true, quotesChanged, headingsChanged };
+  return { ok: true, quotesChanged, headingsChanged, boldChanged };
 }
 
 function runPostSanitize() {

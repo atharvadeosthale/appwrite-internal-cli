@@ -19,7 +19,7 @@ Node.js >= 18 is required.
 | `blog create-author` | Create a new blog author profile |
 | `blog create-blog` | Create a new blog post |
 | `blog import-notion` | Import a Notion export into an existing blog post |
-| `blog sanitize` | Fix headings and curly quotes in a blog post |
+| `blog sanitize` | Fix headings, bold in headings, and curly quotes in a blog post |
 
 ### APIs (JSON output)
 
@@ -247,7 +247,7 @@ Import a Notion export (.zip) into an existing blog post, replacing the markdoc 
 4. **Copy images** — Copies all referenced images and extra images from the export to `static/images/blog/<slug>/`
 5. **Rewrite paths** — Rewrites all image references to `/images/blog/<slug>/<filename>`
 6. **Update markdoc** — Replaces the body of `+page.markdoc` (after frontmatter) with the processed content
-7. **Auto-sanitize** — Automatically runs the sanitize command (fix headings, curly quotes, then `bun run optimize` and `bun run format`) on the imported blog
+7. **Auto-sanitize** — Automatically runs the sanitize command (fix headings, strip bold from headings, curly quotes, then `bun run optimize` and `bun run format`) on the imported blog
 
 ### Image Handling
 
@@ -288,7 +288,7 @@ npx appwrite-internal-cli blog import-notion \
 
 ## `blog sanitize`
 
-Fix heading levels and curly/smart quotes in a blog post's markdoc file.
+Fix heading levels, bold/italic in headings, and curly/smart quotes in a blog post's markdoc file.
 
 ### Flags
 
@@ -301,8 +301,9 @@ Fix heading levels and curly/smart quotes in a blog post's markdoc file.
 ### What It Does
 
 1. **Curly quotes** — Replaces Unicode smart quotes (`\u2018`, `\u2019`, `\u201C`, `\u201D`, etc.) with straight ASCII quotes (`'`, `"`)
-2. **Heading levels** — If the first heading in the body is `##` or deeper, promotes all headings by one level (e.g., `##` becomes `#`, `###` becomes `##`)
-3. **Post-sanitize commands** — After a successful sanitize, automatically runs in the website repo:
+2. **Bold/italic in headings** — Strips bold (`**text**`, `__text__`) and italic (`*text*`, `_text_`) markers from heading text (e.g., `# **Hello**` becomes `# Hello`). This is common in Notion exports.
+3. **Heading levels** — If the first heading in the body is `##` or deeper, promotes all headings by one level (e.g., `##` becomes `#`, `###` becomes `##`)
+4. **Post-sanitize commands** — After a successful sanitize, automatically runs in the website repo:
    - `bun run optimize` — optimizes images and assets
    - `bun run format` — formats code with the project's formatter
 
@@ -325,7 +326,7 @@ The sanitize module exports `sanitizeSlug(slug)` for use by other commands:
 ```javascript
 import { sanitizeSlug } from "./sanitize.js";
 sanitizeSlug("my-blog-post");
-// Returns: { ok: boolean, quotesChanged: boolean, headingsChanged: boolean }
+// Returns: { ok: boolean, quotesChanged: boolean, headingsChanged: boolean, boldChanged: boolean }
 ```
 
 ---
